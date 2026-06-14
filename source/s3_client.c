@@ -2627,10 +2627,14 @@ reset_connection:
         connection->retry_token = NULL;
     }
 
-    /* If we weren't successful, and we're here, that means this failure is not eligible for a retry. So finish the
-     * request, and close our HTTP connection. */
+    /* If we weren't successful, and we're here, that means this failure is not eligible for a retry.
+     * Close the HTTP connection only for transport-level failures (no HTTP response was received).
+     * If we received any HTTP response (response_status > 0), the connection is healthy and should
+     * be returned to the pool rather than destroyed — a 4xx is an application-level error, not a
+     * transport error. */
     if (finish_code != AWS_S3_CONNECTION_FINISH_CODE_SUCCESS) {
-        if (connection->http_connection != NULL) {
+        bool received_response = request->send_data.response_status > 0;
+        if (!received_response && connection->http_connection != NULL) {
             aws_http_connection_close(connection->http_connection);
         }
     }
