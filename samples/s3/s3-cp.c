@@ -7,8 +7,6 @@
 #include <aws/common/file.h>
 #include <aws/io/stream.h>
 #include <aws/io/uri.h>
-#include <aws/s3/private/s3_auto_ranged_put.h>
-#include <aws/s3/private/s3_copy_object.h>
 #include <aws/s3/private/s3_list_objects.h>
 
 #include "app_ctx.h"

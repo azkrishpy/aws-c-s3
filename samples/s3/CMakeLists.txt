@@ -25,3 +25,9 @@ install(TARGETS ${S3_PROJECT_NAME}
         RUNTIME
         DESTINATION ${CMAKE_INSTALL_BINDIR}
         COMPONENT Runtime)
+
+# Standalone, public-API-only samples (each is its own isolated executable).
+# The GLOB above is non-recursive, so these subdirectories are not folded into
+# the `s3` CLI binary.
+add_subdirectory(get_object)
+add_subdirectory(put_object)
