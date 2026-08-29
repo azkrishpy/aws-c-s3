@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0.
  */
 
+/*
+ * Meta request: state machine that produces individual HTTP requests for a single
+ * S3 operation. See docs/meta_requests.md for state machines, vtable, and threading.
+ * See docs/scheduling.md for how requests flow through the preparation pipeline.
+ */
+
 #include "aws/s3/private/s3_auto_ranged_get.h"
 #include "aws/s3/private/s3_auto_ranged_put.h"
 #include "aws/s3/private/s3_checksums.h"

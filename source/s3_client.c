@@ -45,6 +45,15 @@
 #include <inttypes.h>
 #include <math.h>
 
+/*
+ * S3 client: splits user operations (meta requests) into concurrent HTTP requests
+ * and schedules them across pooled connections on a single-threaded work loop.
+ *
+ * See docs/overview.md for the threading model, data categories, and event loop groups.
+ * See docs/scheduling.md for the scheduling loop, request pipeline, and flow control.
+ * See docs/meta_requests.md for how meta requests produce and route individual requests.
+ */
+
 #ifdef _MSC_VER
 #    pragma warning(disable : 4232) /* function pointer to dll symbol */
 #endif                              /* _MSC_VER */
@@ -1556,6 +1565,8 @@ static void s_s3_client_push_meta_request_synced(
     aws_linked_list_push_back(&client->synced_data.pending_meta_request_work, &meta_request_work->node);
 }
 
+/* Single-threaded work loop entry point. See docs/scheduling.md for the full
+ * scheduling algorithm, request pipeline, and flow control counters. */
 static void s_s3_client_schedule_process_work_synced(struct aws_s3_client *client) {
     AWS_PRECONDITION(client);
     AWS_PRECONDITION(client->vtable);
@@ -2220,6 +2231,9 @@ void s_acquire_mem_and_prepare_request(
     aws_s3_meta_request_prepare_request(request->meta_request, request, callback, user_data);
 }
 
+/* Iterate all active meta requests and call update() on each to get the next request to send.
+ * If update() returns a request, hand it off to async preparation. If update() returns
+ * work_remaining=false, the meta request is done and gets removed from threaded_data. */
 void aws_s3_client_update_meta_requests_threaded(struct aws_s3_client *client) {
     AWS_PRECONDITION(client);
 
@@ -2232,6 +2246,8 @@ void aws_s3_client_update_meta_requests_threaded(struct aws_s3_client *client) {
     uint32_t num_requests_in_flight = (uint32_t)aws_atomic_load_int(&client->stats.num_requests_in_flight);
     uint32_t num_requests_streaming = (uint32_t)aws_atomic_load_int(&client->stats.num_requests_streaming_request_body);
 
+    /* Two-pass scheduling: conservative pass (per-type limits) then greedy pass
+     * (first-come-first-served). See docs/scheduling.md#two-pass-scheduling. */
     const uint32_t pass_flags[] = {
         AWS_S3_META_REQUEST_UPDATE_FLAG_CONSERVATIVE,
         0,
