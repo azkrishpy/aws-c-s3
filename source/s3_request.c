@@ -272,6 +272,10 @@ struct aws_s3_request_metrics *aws_s3_request_metrics_new(struct aws_allocator *
     metrics->time_metrics.sign_end_timestamp_ns = -1;
     metrics->time_metrics.signing_duration_ns = -1;
 
+    metrics->time_metrics.cred_start_timestamp_ns = -1;
+    metrics->time_metrics.cred_end_timestamp_ns = -1;
+    metrics->time_metrics.cred_duration_ns = -1;
+
     metrics->time_metrics.mem_acquire_start_timestamp_ns = -1;
     metrics->time_metrics.mem_acquire_end_timestamp_ns = -1;
     metrics->time_metrics.mem_acquire_duration_ns = -1;
@@ -461,6 +465,42 @@ int aws_s3_request_metrics_get_signing_duration_ns(
         return aws_raise_error(AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE);
     }
     *out_signing_duration = metrics->time_metrics.signing_duration_ns;
+    return AWS_OP_SUCCESS;
+}
+
+int aws_s3_request_metrics_get_cred_start_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_start_time) {
+    AWS_PRECONDITION(metrics);
+    AWS_PRECONDITION(out_cred_start_time);
+    if (metrics->time_metrics.cred_start_timestamp_ns < 0) {
+        return aws_raise_error(AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE);
+    }
+    *out_cred_start_time = metrics->time_metrics.cred_start_timestamp_ns;
+    return AWS_OP_SUCCESS;
+}
+
+int aws_s3_request_metrics_get_cred_end_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_end_time) {
+    AWS_PRECONDITION(metrics);
+    AWS_PRECONDITION(out_cred_end_time);
+    if (metrics->time_metrics.cred_end_timestamp_ns < 0) {
+        return aws_raise_error(AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE);
+    }
+    *out_cred_end_time = metrics->time_metrics.cred_end_timestamp_ns;
+    return AWS_OP_SUCCESS;
+}
+
+int aws_s3_request_metrics_get_cred_duration_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_duration) {
+    AWS_PRECONDITION(metrics);
+    AWS_PRECONDITION(out_cred_duration);
+    if (metrics->time_metrics.cred_duration_ns < 0) {
+        return aws_raise_error(AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE);
+    }
+    *out_cred_duration = metrics->time_metrics.cred_duration_ns;
     return AWS_OP_SUCCESS;
 }
 

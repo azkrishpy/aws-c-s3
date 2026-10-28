@@ -2029,6 +2029,27 @@ int aws_s3_request_metrics_get_signing_duration_ns(
     const struct aws_s3_request_metrics *metrics,
     uint64_t *out_signing_duration);
 
+/* Get the time stamp when the credentials resolution for the request started. Timestamps are from
+ * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_start_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_start_time);
+
+/* Get the time stamp when the credentials resolution for the request ended. Timestamps are from
+ * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_end_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_end_time);
+
+/* The time duration for resolving credentials (cred_end_timestamp_ns - cred_start_timestamp_ns).
+ * AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_duration_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_duration);
+
 /* Get the time stamp when the memory acquisition for the request started. Timestamps are from
  * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
 AWS_S3_API

@@ -1622,9 +1622,25 @@ done:
     s_aws_get_s3express_credentials_user_data_destroy(context);
 }
 
+static void s_s3_request_stamp_cred_start(struct aws_s3_request *request) {
+    if (request->send_data.metrics) {
+        aws_high_res_clock_get_ticks((uint64_t *)&request->send_data.metrics->time_metrics.cred_start_timestamp_ns);
+    }
+}
+
+static void s_s3_request_stamp_cred_end(struct aws_s3_request *request) {
+    if (request->send_data.metrics) {
+        struct aws_s3_request_metrics *metric = request->send_data.metrics;
+        aws_high_res_clock_get_ticks((uint64_t *)&metric->time_metrics.cred_end_timestamp_ns);
+        metric->time_metrics.cred_duration_ns =
+            metric->time_metrics.cred_end_timestamp_ns - metric->time_metrics.cred_start_timestamp_ns;
+    }
+}
+
 static void s_get_original_credentials_callback(struct aws_credentials *credentials, int error_code, void *user_data) {
     struct aws_get_s3express_credentials_user_data *context = user_data;
     struct aws_s3_meta_request *meta_request = context->meta_request;
+    s_s3_request_stamp_cred_end(context->request);
     if (error_code) {
         AWS_LOGF_ERROR(
             AWS_LS_S3_META_REQUEST,
@@ -1658,6 +1674,44 @@ static void s_get_original_credentials_callback(struct aws_credentials *credenti
         context->on_signing_complete(NULL, aws_last_error_or_unknown(), user_data);
         s_aws_get_s3express_credentials_user_data_destroy(context);
     }
+}
+
+static void s_get_regular_credentials_callback(struct aws_credentials *credentials, int error_code, void *user_data) {
+    struct aws_get_s3express_credentials_user_data *context = user_data;
+    struct aws_signing_config_aws signing_config = context->base_signing_config;
+
+    s_s3_request_stamp_cred_end(context->request);
+    if (error_code) {
+        AWS_LOGF_ERROR(
+            AWS_LS_S3_META_REQUEST,
+            "id=%p: Failed to get credentials for request %p. due to error code %d (%s)",
+            (void *)context->meta_request,
+            (void *)context->request,
+            error_code,
+            aws_error_str(error_code));
+        context->on_signing_complete(NULL, error_code, context->user_data);
+        goto done;
+    }
+    s_s3_meta_request_init_signing_date_time(context->meta_request, &signing_config.date);
+    signing_config.credentials = credentials;
+    signing_config.credentials_provider = NULL;
+    if (aws_sign_request_aws(
+            context->allocator,
+            context->request->send_data.signable,
+            (struct aws_signing_config_base *)&signing_config,
+            context->on_signing_complete,
+            context->user_data)) {
+        AWS_LOGF_ERROR(
+            AWS_LS_S3_META_REQUEST,
+            "id=%p: Could not sign request %p. due to error code %d (%s)",
+            (void *)context->meta_request,
+            (void *)context->request,
+            aws_last_error_or_unknown(),
+            aws_error_str(aws_last_error_or_unknown()));
+        context->on_signing_complete(NULL, aws_last_error_or_unknown(), context->user_data);
+    }
+done:
+    s_aws_get_s3express_credentials_user_data_destroy(context);
 }
 
 static void s_meta_request_resolve_signing_config(
@@ -1775,6 +1829,7 @@ void aws_s3_meta_request_sign_request_default_impl(
             }
         } else if (signing_config.credentials_provider) {
             /* Get the credentials from provider first. */
+            s_s3_request_stamp_cred_start(request);
             if (aws_credentials_provider_get_credentials(
                     signing_config.credentials_provider, s_get_original_credentials_callback, context)) {
                 AWS_LOGF_ERROR(
@@ -1791,6 +1846,30 @@ void aws_s3_meta_request_sign_request_default_impl(
         /* Regular signing. */
         if (disable_s3_express_signing) {
             signing_config.algorithm = AWS_SIGNING_ALGORITHM_V4;
+        }
+        if (signing_config.credentials == NULL && signing_config.credentials_provider != NULL) {
+            /* Resolve the credentials here, so the time taken can be recorded separately from signing. */
+            struct aws_get_s3express_credentials_user_data *context =
+                aws_mem_calloc(meta_request->allocator, 1, sizeof(struct aws_get_s3express_credentials_user_data));
+            context->allocator = meta_request->allocator;
+            context->base_signing_config = signing_config;
+            context->meta_request = aws_s3_meta_request_acquire(meta_request);
+            context->on_signing_complete = on_signing_complete;
+            context->request = request;
+            context->user_data = user_data;
+
+            s_s3_request_stamp_cred_start(request);
+            if (aws_credentials_provider_get_credentials(
+                    signing_config.credentials_provider, s_get_regular_credentials_callback, context)) {
+                AWS_LOGF_ERROR(
+                    AWS_LS_S3_META_REQUEST,
+                    "id=%p: Could not get credentials for request %p",
+                    (void *)meta_request,
+                    (void *)request);
+                on_signing_complete(NULL, aws_last_error_or_unknown(), user_data);
+                s_aws_get_s3express_credentials_user_data_destroy(context);
+            }
+            return;
         }
         s_s3_meta_request_init_signing_date_time(meta_request, &signing_config.date);
         if (aws_sign_request_aws(

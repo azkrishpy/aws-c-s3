@@ -90,6 +90,16 @@ struct aws_s3_request_metrics {
          * sign_start_timestamp_ns). When sign_end_timestamp_ns is 0, means data not available. */
         int64_t signing_duration_ns;
 
+        /* The time stamp when the request started to resolve credentials. -1 means data not
+         * available. Timestamp are from `aws_high_res_clock_get_ticks` */
+        int64_t cred_start_timestamp_ns;
+        /* The time stamp when the request finished resolving credentials. -1 means data not
+         * available. Timestamp are from `aws_high_res_clock_get_ticks` */
+        int64_t cred_end_timestamp_ns;
+        /* The time duration for resolving credentials (cred_end_timestamp_ns - cred_start_timestamp_ns). -1 means
+         * data not available. */
+        int64_t cred_duration_ns;
+
         /* The time stamp when the request started to acquire memory. -1 means data not
          * available. Timestamp are from `aws_high_res_clock_get_ticks` */
         int64_t mem_acquire_start_timestamp_ns;
