@@ -138,6 +138,9 @@ static int s_check_direct_io_out_of_order(
 #define S_RANGED_UNALIGNED_START ((uint64_t)1000)
 #define S_RANGED_UNALIGNED_RANGE "bytes=1000-197607"
 
+/* Unsigned (anonymous) requests never resolve credentials, so their credentials metrics stay unavailable. */
+static bool s_expect_credentials_metrics = true;
+
 static int s_validate_time_metrics(struct aws_s3_request_metrics *metrics, bool is_last_attempt) {
     uint64_t start = 0, end = 0, duration = 0;
     int error_code = aws_s3_request_metrics_get_error_code(metrics);
@@ -202,6 +205,23 @@ static int s_validate_time_metrics(struct aws_s3_request_metrics *metrics, bool 
         ASSERT_SUCCESS(aws_s3_request_metrics_get_signing_duration_ns(metrics, &duration));
         ASSERT_TRUE(duration > 0);
         ASSERT_UINT_EQUALS(end - start, duration);
+
+        if (s_expect_credentials_metrics) {
+            /* Signed with a credentials provider, so the resolution is timed inside the signing window. */
+            uint64_t sign_start = start;
+            uint64_t sign_end = end;
+            ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_start_timestamp_ns(metrics, &start));
+            ASSERT_TRUE(start >= sign_start);
+            ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_end_timestamp_ns(metrics, &end));
+            ASSERT_TRUE(end >= start);
+            ASSERT_TRUE(end <= sign_end);
+            ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_duration_ns(metrics, &duration));
+            ASSERT_UINT_EQUALS(end - start, duration);
+        } else {
+            ASSERT_FAILS(aws_s3_request_metrics_get_cred_start_timestamp_ns(metrics, &start));
+            ASSERT_FAILS(aws_s3_request_metrics_get_cred_end_timestamp_ns(metrics, &end));
+            ASSERT_FAILS(aws_s3_request_metrics_get_cred_duration_ns(metrics, &duration));
+        }
 
         if (metrics->req_resp_info_metrics.request_type == AWS_S3_REQUEST_TYPE_GET_OBJECT) {
             ASSERT_SUCCESS(aws_s3_request_metrics_get_delivery_start_timestamp_ns(metrics, &start));
@@ -294,6 +314,7 @@ static int s_validate_upload_part_metrics(struct aws_s3_request_metrics *metrics
     ASSERT_UINT_EQUALS(AWS_S3_REQUEST_TYPE_UPLOAD_PART, request_type);
     ASSERT_SUCCESS(aws_s3_request_metrics_get_operation_name(metrics, &operation_name));
     ASSERT_STR_EQUALS("UploadPart", aws_string_c_str(operation_name));
+    ASSERT_TRUE(aws_s3_request_metrics_has_part_range(metrics));
 
     ASSERT_SUCCESS(s_validate_time_metrics(metrics, is_last_attempt));
 
@@ -876,7 +897,9 @@ TEST_CASE(multipart_upload_unsigned_with_trailer_checksum_mock_server) {
     struct aws_s3_meta_request_test_results out_results;
     aws_s3_meta_request_test_results_init(&out_results, allocator);
     ASSERT_SUCCESS(aws_s3_tester_send_meta_request_with_options(&tester, &put_options, &out_results));
+    s_expect_credentials_metrics = false;
     ASSERT_SUCCESS(s_validate_mpu_mock_server_metrics(&out_results.synced_data.metrics, 2 /*expected_num_parts*/));
+    s_expect_credentials_metrics = true;
 
     /**
      * Check the recorded headers.

@@ -2029,6 +2029,27 @@ int aws_s3_request_metrics_get_signing_duration_ns(
     const struct aws_s3_request_metrics *metrics,
     uint64_t *out_signing_duration);
 
+/* Get the time stamp when the credentials resolution for the request started. Timestamps are from
+ * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_start_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_start_time);
+
+/* Get the time stamp when the credentials resolution for the request ended. Timestamps are from
+ * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_end_timestamp_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_end_time);
+
+/* The time duration for resolving credentials (cred_end_timestamp_ns - cred_start_timestamp_ns).
+ * AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
+AWS_S3_API
+int aws_s3_request_metrics_get_cred_duration_ns(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_cred_duration);
+
 /* Get the time stamp when the memory acquisition for the request started. Timestamps are from
  * `aws_high_res_clock_get_ticks` AWS_ERROR_S3_METRIC_DATA_NOT_AVAILABLE will be raised if data not available. */
 AWS_S3_API
@@ -2203,6 +2224,17 @@ AWS_S3_API
 void aws_s3_request_metrics_get_part_range_end(
     const struct aws_s3_request_metrics *metrics,
     uint64_t *out_part_range_end);
+
+/* Get the number of response body bytes received by this attempt. Cannot fail */
+AWS_S3_API
+void aws_s3_request_metrics_get_response_body_size(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_response_body_size);
+
+/* Whether the part range of this request is meaningful. False for requests without one (default meta request),
+ * where the range getters return 0/0. Cannot fail */
+AWS_S3_API
+bool aws_s3_request_metrics_has_part_range(const struct aws_s3_request_metrics *metrics);
 
 /* Get the part number from request metrics. */
 AWS_S3_API
