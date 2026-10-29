@@ -2225,6 +2225,17 @@ void aws_s3_request_metrics_get_part_range_end(
     const struct aws_s3_request_metrics *metrics,
     uint64_t *out_part_range_end);
 
+/* Get the number of response body bytes received by this attempt. Cannot fail */
+AWS_S3_API
+void aws_s3_request_metrics_get_response_body_size(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_response_body_size);
+
+/* Whether the part range of this request is meaningful. False for requests without one (default meta request),
+ * where the range getters return 0/0. Cannot fail */
+AWS_S3_API
+bool aws_s3_request_metrics_has_part_range(const struct aws_s3_request_metrics *metrics);
+
 /* Get the part number from request metrics. */
 AWS_S3_API
 void aws_s3_request_metrics_get_part_number(const struct aws_s3_request_metrics *metrics, uint32_t *out_part_number);

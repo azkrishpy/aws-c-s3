@@ -94,6 +94,8 @@ static void s_populate_metrics_from_message(struct aws_s3_request *request, stru
     request->send_data.metrics->part_info_metrics.part_range_start = request->part_range_start;
     request->send_data.metrics->part_info_metrics.part_range_end = request->part_range_end;
     request->send_data.metrics->part_info_metrics.part_number = request->part_number;
+    request->send_data.metrics->part_info_metrics.has_part_range =
+        request->meta_request->type != AWS_S3_META_REQUEST_TYPE_DEFAULT;
 
     (void)err;
 }
@@ -722,6 +724,19 @@ void aws_s3_request_metrics_get_part_range_end(
     AWS_PRECONDITION(metrics);
     AWS_PRECONDITION(out_part_range_end);
     *out_part_range_end = metrics->part_info_metrics.part_range_end;
+}
+
+void aws_s3_request_metrics_get_response_body_size(
+    const struct aws_s3_request_metrics *metrics,
+    uint64_t *out_response_body_size) {
+    AWS_PRECONDITION(metrics);
+    AWS_PRECONDITION(out_response_body_size);
+    *out_response_body_size = metrics->req_resp_info_metrics.response_body_size;
+}
+
+bool aws_s3_request_metrics_has_part_range(const struct aws_s3_request_metrics *metrics) {
+    AWS_PRECONDITION(metrics);
+    return metrics->part_info_metrics.has_part_range;
 }
 
 void aws_s3_request_metrics_get_part_number(const struct aws_s3_request_metrics *metrics, uint32_t *out_part_number) {

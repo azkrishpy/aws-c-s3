@@ -1563,6 +1563,21 @@ static void s_s3_meta_request_sign_request(
     meta_request->vtable->sign_request(meta_request, request, on_signing_complete, user_data);
 }
 
+static void s_s3_request_stamp_cred_start(struct aws_s3_request *request) {
+    if (request->send_data.metrics) {
+        aws_high_res_clock_get_ticks((uint64_t *)&request->send_data.metrics->time_metrics.cred_start_timestamp_ns);
+    }
+}
+
+static void s_s3_request_stamp_cred_end(struct aws_s3_request *request) {
+    if (request->send_data.metrics) {
+        struct aws_s3_request_metrics *metric = request->send_data.metrics;
+        aws_high_res_clock_get_ticks((uint64_t *)&metric->time_metrics.cred_end_timestamp_ns);
+        metric->time_metrics.cred_duration_ns =
+            metric->time_metrics.cred_end_timestamp_ns - metric->time_metrics.cred_start_timestamp_ns;
+    }
+}
+
 struct aws_get_s3express_credentials_user_data {
     /* Keep our own reference to allocator, because the meta request can be gone after the callback invoked. */
     struct aws_allocator *allocator;
@@ -1587,6 +1602,8 @@ static void s_aws_get_s3express_credentials_user_data_destroy(struct aws_get_s3e
 static void s_get_s3express_credentials_callback(struct aws_credentials *credentials, int error_code, void *user_data) {
     struct aws_get_s3express_credentials_user_data *context = user_data;
     struct aws_signing_config_aws signing_config = context->base_signing_config;
+
+    s_s3_request_stamp_cred_end(context->request);
 
     if (error_code) {
         AWS_LOGF_ERROR(
@@ -1622,26 +1639,11 @@ done:
     s_aws_get_s3express_credentials_user_data_destroy(context);
 }
 
-static void s_s3_request_stamp_cred_start(struct aws_s3_request *request) {
-    if (request->send_data.metrics) {
-        aws_high_res_clock_get_ticks((uint64_t *)&request->send_data.metrics->time_metrics.cred_start_timestamp_ns);
-    }
-}
-
-static void s_s3_request_stamp_cred_end(struct aws_s3_request *request) {
-    if (request->send_data.metrics) {
-        struct aws_s3_request_metrics *metric = request->send_data.metrics;
-        aws_high_res_clock_get_ticks((uint64_t *)&metric->time_metrics.cred_end_timestamp_ns);
-        metric->time_metrics.cred_duration_ns =
-            metric->time_metrics.cred_end_timestamp_ns - metric->time_metrics.cred_start_timestamp_ns;
-    }
-}
-
 static void s_get_original_credentials_callback(struct aws_credentials *credentials, int error_code, void *user_data) {
     struct aws_get_s3express_credentials_user_data *context = user_data;
     struct aws_s3_meta_request *meta_request = context->meta_request;
-    s_s3_request_stamp_cred_end(context->request);
     if (error_code) {
+        s_s3_request_stamp_cred_end(context->request);
         AWS_LOGF_ERROR(
             AWS_LS_S3_META_REQUEST,
             "id=%p: Failed to get S3 Express credentials %p. due to error code %d (%s)",
@@ -1812,6 +1814,7 @@ void aws_s3_meta_request_sign_request_default_impl(
             /**
              * Derive the credentials for S3 Express.
              */
+            s_s3_request_stamp_cred_start(request);
             if (aws_s3express_credentials_provider_get_credentials(
                     client->s3express_provider,
                     context->original_credentials,
@@ -2460,6 +2463,7 @@ static void s_s3_meta_request_stream_metrics(
 
     s3_metrics->time_metrics.receive_end_timestamp_ns = http_metrics->receive_end_timestamp_ns;
     s3_metrics->time_metrics.receiving_duration_ns = http_metrics->receiving_duration_ns;
+    s3_metrics->req_resp_info_metrics.response_body_size = request->send_data.response_body.len;
 
     s3_metrics->crt_info_metrics.stream_id = http_metrics->stream_id;
 

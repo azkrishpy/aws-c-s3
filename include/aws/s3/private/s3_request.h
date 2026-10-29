@@ -165,6 +165,8 @@ struct aws_s3_request_metrics {
         struct aws_string *operation_name;
         /* The type of request made */
         enum aws_s3_request_type request_type;
+        /* Bytes of response body received by this attempt. */
+        uint64_t response_body_size;
     } req_resp_info_metrics;
 
     /* Snapshot of the endpoint's HTTP connection manager metrics, taken right before this request asks
@@ -199,6 +201,9 @@ struct aws_s3_request_metrics {
         uint64_t part_range_end;
         /* Part number that this request refers to. */
         uint32_t part_number;
+        /* Whether the range above was assigned. False for requests without one, where it stays 0/0, which is
+         * otherwise indistinguishable from the valid one-byte range 0..0. */
+        bool has_part_range;
     } part_info_metrics;
 
     struct aws_ref_count ref_count;

@@ -314,6 +314,7 @@ static int s_validate_upload_part_metrics(struct aws_s3_request_metrics *metrics
     ASSERT_UINT_EQUALS(AWS_S3_REQUEST_TYPE_UPLOAD_PART, request_type);
     ASSERT_SUCCESS(aws_s3_request_metrics_get_operation_name(metrics, &operation_name));
     ASSERT_STR_EQUALS("UploadPart", aws_string_c_str(operation_name));
+    ASSERT_TRUE(aws_s3_request_metrics_has_part_range(metrics));
 
     ASSERT_SUCCESS(s_validate_time_metrics(metrics, is_last_attempt));
 

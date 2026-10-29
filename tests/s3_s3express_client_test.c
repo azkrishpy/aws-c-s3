@@ -61,7 +61,8 @@ static int s_s3express_client_tester_cleanup(void) {
 static int s_create_s3express_request_mock_server(
     struct aws_allocator *allocator,
     struct aws_s3_tester *tester,
-    struct aws_s3_client *client) {
+    struct aws_s3_client *client,
+    struct aws_s3_meta_request_test_results *out_results) {
 
     struct aws_byte_cursor object_path = aws_byte_cursor_from_c_str("/default");
 
@@ -79,7 +80,7 @@ static int s_create_s3express_request_mock_server(
         .mock_server = true,
         .use_s3express_signing = true,
     };
-    ASSERT_SUCCESS(aws_s3_tester_send_meta_request_with_options(tester, &put_options, NULL));
+    ASSERT_SUCCESS(aws_s3_tester_send_meta_request_with_options(tester, &put_options, out_results));
     return AWS_OP_SUCCESS;
 }
 
@@ -99,10 +100,36 @@ TEST_CASE(s3express_client_sanity_test_mock_server) {
 
     struct aws_s3_client *client = aws_s3_client_new(allocator, &client_config);
 
-    ASSERT_SUCCESS(s_create_s3express_request_mock_server(allocator, &tester, client));
+    struct aws_s3_meta_request_test_results out_results;
+    aws_s3_meta_request_test_results_init(&out_results, allocator);
+    ASSERT_SUCCESS(s_create_s3express_request_mock_server(allocator, &tester, client, &out_results));
 
     ASSERT_NOT_NULL(client->s3express_provider);
 
+    /* The credentials time covers deriving the S3 Express credentials, and sits inside the signing window. */
+    size_t num_metrics = aws_array_list_length(&out_results.synced_data.succeed_metrics);
+    ASSERT_TRUE(num_metrics > 0);
+    for (size_t i = 0; i < num_metrics; ++i) {
+        struct aws_s3_request_metrics *metrics = NULL;
+        ASSERT_SUCCESS(aws_array_list_get_at(&out_results.synced_data.succeed_metrics, (void **)&metrics, i));
+        uint64_t sign_start = 0;
+        uint64_t sign_end = 0;
+        uint64_t cred_start = 0;
+        uint64_t cred_end = 0;
+        uint64_t cred_duration = 0;
+        ASSERT_SUCCESS(aws_s3_request_metrics_get_sign_start_timestamp_ns(metrics, &sign_start));
+        ASSERT_SUCCESS(aws_s3_request_metrics_get_sign_end_timestamp_ns(metrics, &sign_end));
+        ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_start_timestamp_ns(metrics, &cred_start));
+        ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_end_timestamp_ns(metrics, &cred_end));
+        ASSERT_SUCCESS(aws_s3_request_metrics_get_cred_duration_ns(metrics, &cred_duration));
+        ASSERT_TRUE(sign_start <= cred_start);
+        ASSERT_TRUE(cred_start <= cred_end);
+        ASSERT_TRUE(cred_end <= sign_end);
+        ASSERT_UINT_EQUALS(cred_end - cred_start, cred_duration);
+        ASSERT_TRUE(aws_s3_request_metrics_has_part_range(metrics));
+    }
+
+    aws_s3_meta_request_test_results_clean_up(&out_results);
     aws_s3_client_release(client);
     aws_s3_tester_clean_up(&tester);
     return AWS_OP_SUCCESS;
@@ -174,7 +201,7 @@ TEST_CASE(s3express_client_sanity_override_test_mock_server) {
 
     struct aws_s3_client *client = aws_s3_client_new(allocator, &client_config);
 
-    ASSERT_SUCCESS(s_create_s3express_request_mock_server(allocator, &tester, client));
+    ASSERT_SUCCESS(s_create_s3express_request_mock_server(allocator, &tester, client, NULL));
     ASSERT_NOT_NULL(client->s3express_provider);
 
     aws_s3_client_release(client);
