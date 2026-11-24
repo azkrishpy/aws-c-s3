@@ -1,0 +1,25 @@
+# FORK EXPERIMENT (azkrishpy/aws-c-s3): the pre-merge checks under the real
+# pull_request_target trigger, with credentials from a personal AWS account.
+name: Pre-merge checks
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled]
+
+concurrency:
+  group: pre-merge-${{ github.event.pull_request.number }}-${{ github.event.action }}-${{ github.event.label.name }}
+
+jobs:
+  pre-merge:
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      statuses: write
+    uses: azkrishpy/aws-crt-builder/.github/workflows/pre-merge-checks.yml@pm/fork-ci
+    with:
+      lib-name: aws-c-s3
+      approval-label: ci-ready
+      abi-image-registry: 750803918888.dkr.ecr.us-east-1.amazonaws.com
+    secrets:
+      CRT_CI_ROLE_ARN: ${{ secrets.CRT_CI_ROLE_ARN }}
