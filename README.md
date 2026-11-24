@@ -243,3 +243,4 @@ aws-c-s3/build/samples/s3/s3 ls s3://<bucket-name> --region <region>
 
 The unit tests require an AWS account with S3 buckets set up in a particular way.
 Use the [test_helper script](./tests/test_helper/) to set this up.
+<!-- fork pre-merge test -->
